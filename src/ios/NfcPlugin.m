@@ -18,7 +18,7 @@
 @property (nonatomic, assign) BOOL returnTagInCallback;
 @property (nonatomic, assign) BOOL returnTagInEvent;
 @property (nonatomic, assign) BOOL keepSessionOpen;
-@property (strong, nonatomic) NFCReaderSession *nfcSession API_AVAILABLE(ios(11.0));
+@property (strong, nonatomic) NFCTagReaderSession *nfcSession API_AVAILABLE(ios(13.0));
 @property (strong, nonatomic) NFCNDEFMessage *messageToWrite API_AVAILABLE(ios(11.0));
 @end
 
@@ -201,10 +201,9 @@
 - (void)transceive:(CDVInvokedUrlCommand*)command API_AVAILABLE(ios(13.0)) {
     NSLog(@"transceive");
 
-    NSArray<NSDictionary *> *options = [command argumentAtIndex:0];
-    self.keepSessionOpen = [options valueForKey:@"keepSessionOpen"];
+    NSData *bytes = [command argumentAtIndex:0];
 
-    [self transceive:command];
+    [self sendCommand:command :bytes];
 }
 
 #pragma mark - NFCNDEFReaderSessionDelegate
@@ -215,7 +214,6 @@
 
     session.alertMessage = @"Tag successfully read.";
     for (NFCNDEFMessage *message in messages) {
-        [self fireNdefEvent: message];
     }
 }
 
@@ -430,32 +428,33 @@
     }
 }
 
-- (void)transceive:(NSArray *)bytes tag:(id<NFCTag>)tag callback: (nonnull RCTResponseSenderBlock)callback)  API_AVAILABLE(ios(13.0)){
+- (void)sendCommand:(CDVInvokedUrlCommand*)command :(NSData *)bytes API_AVAILABLE(ios(13.0)){
     if (@available(iOS 13.0, *)) {
-            if (nfcSession != nil) {
-                if (nfcSession.connectedTag) {
-                    id<NFCISO7816Tag> iso7816Tag = [nfcSession.connectedTag asNFCISO7816Tag];
-                    NSData *data = [self arrayToData:bytes];
-                    NFCISO7816APDU *apdu = [[NFCISO7816APDU alloc] initWithData:data];
+            if (self.nfcSession != nil) {
+                if (self.nfcSession.connectedTag) {
+                    id<NFCISO7816Tag> iso7816Tag = [self.nfcSession.connectedTag asNFCISO7816Tag];
+                    NFCISO7816APDU *apdu = [[NFCISO7816APDU alloc] initWithData:bytes];
                     if (iso7816Tag) {
                         [iso7816Tag sendCommandAPDU:apdu completionHandler:^(NSData* response, uint8_t sw1, uint8_t sw2, NSError* error) {
-                            if (error) {
-                                callback(@[getErrorMessage(error), [NSNull null]]);
-                            } else {
-                                callback(@[[NSNull null], [NfcManager dataToArray:response], [NSNumber numberWithInt:sw1], [NSNumber numberWithInt:sw2]]);
-                            }
-                        }];
-                        return;
+                        if (error) {
+                            [self sendError:(NSString *)error];
+                        } else {
+                            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsArray:[self uint8ArrayFromNSData:response]];
+                            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+                            [self closeSession:self.nfcSession];
+                        }
+                    }];
+                    return;
                     } else {
-                        callback(@[@"not an iso7816 tag", [NSNull null]]);
+                        [self sendError:(NSString *)@"not an iso7816 tag"];
                     }
                 }
-                callback(@[@"Not connected", [NSNull null]]);
+                [self sendError:(NSString *)@"Not connected"];
             } else {
-                callback(@[@"Not even registered", [NSNull null]]);
+                 [self sendError:(NSString *)@"Not even registered"];
             }
         } else {
-            callback(@[@"Not support in this device", [NSNull null]]);
+            [self sendError:(NSString *)@"Not support in this device"];
         }
 }
 
@@ -627,7 +626,10 @@
     NSMutableArray *array = [NSMutableArray array];
     for (NSUInteger i = 0; i < [data length]; i += sizeof(uint8_t)) {
         uint8_t elem = OSReadLittleInt(bytes, i);
-        [array addObject:[NSNumber numberWithInt:elem]];
+        [array addObject:[NSNumber numbe
+
+Natka, [15.10.21 18:00]
+rWithInt:elem]];
     }
     return array;
 }
@@ -638,6 +640,18 @@
     NSMutableData *data = [[NSMutableData alloc] initWithCapacity: [array count]];
     for (NSNumber *number in array) {
         uint8_t b = (uint8_t)[number unsignedIntValue];
+        // NSLog(@"> %hhu", b);
+        [data appendBytes:&b length:1];
+    }
+    return data;
+}
+
+- (NSData *) uint16ArrayToNSData:(NSArray *) array {
+    // NSLog(@"nsDataFromUint8Array input %@", array);
+
+    NSMutableData *data = [[NSMutableData alloc] initWithCapacity: [array count]];
+    for (NSNumber *number in array) {
+        uint16_t b = (uint16_t)[number unsignedIntValue];
         // NSLog(@"> %hhu", b);
         [data appendBytes:&b length:1];
     }
