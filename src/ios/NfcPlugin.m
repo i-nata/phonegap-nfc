@@ -432,9 +432,9 @@
 
 - (void)transceive:(NSArray *)bytes tag:(id<NFCTag>)tag callback: (nonnull RCTResponseSenderBlock)callback)  API_AVAILABLE(ios(13.0)){
     if (@available(iOS 13.0, *)) {
-            if (tag != nil) {
-                if (tag.type) {
-                    id<NFCISO7816Tag> iso7816Tag = [tag.type asNFCISO7816Tag];
+            if (nfcSession != nil) {
+                if (nfcSession.connectedTag) {
+                    id<NFCISO7816Tag> iso7816Tag = [nfcSession.connectedTag asNFCISO7816Tag];
                     NSData *data = [self arrayToData:bytes];
                     NFCISO7816APDU *apdu = [[NFCISO7816APDU alloc] initWithData:data];
                     if (iso7816Tag) {
