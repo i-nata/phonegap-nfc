@@ -25,6 +25,8 @@
 - (void)scanNdef:(CDVInvokedUrlCommand *)command;
 - (void)scanTag:(CDVInvokedUrlCommand *)command;
 - (void)cancelScan:(CDVInvokedUrlCommand *)command;
+// Send commands to ISO
+- (void)transceive:(CDVInvokedUrlCommand *)command;
 
 // Standard PhoneGap NFC API
 - (void)registerNdef:(CDVInvokedUrlCommand *)command;
